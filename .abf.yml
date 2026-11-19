@@ -1,2 +1,4 @@
 sources:
+  junixsocket-2.11.1.tar.gz: 4e33bd2d42166b194529fd64f52d3f4e8d72c1d7
+removed_sources:
   junixsocket-2.8.3.tar.gz: 57cbb0b475b7c6b189d98dfa5f93c44f7628937f

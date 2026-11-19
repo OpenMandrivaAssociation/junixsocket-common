@@ -1,12 +1,12 @@
 Name:		junixsocket-common
-Version:	2.8.3
+Version:	2.11.1
 Release:	1
 Summary:	Java API for Unix domain sockets
 Group:		Development/Java
 License:	Apache-2.0
 URL:		https://github.com/kohlschutter/junixsocket
-# Tag junixsocket-2.8.3. The two prebuilt jars in that tag are removed
-# before this archive is stored.
+# Tag junixsocket-2.11.1. Prebuilt jars in that tag are removed before
+# this archive is stored. The native library stays out of this package.
 Source0:	https://github.com/kohlschutter/junixsocket/archive/refs/tags/junixsocket-%{version}.tar.gz#/junixsocket-%{version}.tar.gz
 
 BuildArch:	noarch
@@ -16,11 +16,12 @@ BuildRequires:	mvn(com.google.errorprone:error_prone_annotations)
 
 %description
 junixsocket-common is the pure Java API for AF_UNIX sockets.
-mwiede jsch 0.2.16, pinned by Gradle 9.9.1, compiles against
-AFUNIXSocketAddress, AFUNIXSocketChannel, and AFUNIXServerSocketChannel.
-The native library is a separate artifact and is not in this package.
-Class files in the root of the jar are Java 8. SocketAddressUtil for
-UnixDomainSocketAddress is the Java 16 copy under META-INF/versions/16.
+mwiede-jsch 0.2.26 compiles against AFUNIXSocketAddress,
+AFUNIXSocketChannel, and AFUNIXServerSocketChannel. The native library
+is a separate artifact and is not in this package. Class files in the
+root of the jar are Java 8. SocketAddressUtil for UnixDomainSocketAddress
+is the Java 16 copy under META-INF/versions/16. ThreadUtil under
+META-INF/versions/21 is the virtual-thread implementation.
 
 %prep
 %autosetup -n junixsocket-%{version} -p1
@@ -105,12 +106,17 @@ find junixsocket-common/src/main/java -name '*.java' \
 	! -name DatagramSocketShim.java \
 	! -name PathUtil.java \
 	! -name SocketImplShim.java \
+	! -name Java7Util.java \
+	! -name SelectorProviderShim.java \
+	! -name ThreadUtil.java \
 	>> sources.list
 printf '%s\n' \
+	junixsocket-common/src/main/java14/org/newsclub/net/unix/SelectorProviderShim.java \
 	junixsocket-common/src/main/java15/org/newsclub/net/unix/SocketAddressUtil.java \
+	junixsocket-common/src/main/java20/org/newsclub/net/unix/ThreadUtil.java \
 	junixsocket-common/src/main/java-unresolved-properties/org/newsclub/net/unix/BuildProperties.java \
 	>> sources.list
-test "$(wc -l < sources.list)" -eq 93
+test "$(wc -l < sources.list)" -eq 138
 
 mkdir -p classes
 javac --release 8 -encoding UTF-8 \
@@ -122,12 +128,22 @@ javac --release 16 -encoding UTF-8 \
 	-cp "ann-classes:%{_javadir}/error_prone_annotations.jar:classes" \
 	-d classes/META-INF/versions/16 \
 	junixsocket-common/src/main/java/org/newsclub/net/unix/SocketAddressUtil.java
+mkdir -p classes/META-INF/versions/21
+javac --release 21 -encoding UTF-8 \
+	-cp "ann-classes:%{_javadir}/error_prone_annotations.jar:classes" \
+	-d classes/META-INF/versions/21 \
+	junixsocket-common/src/main/java/org/newsclub/net/unix/ThreadUtil.java
+javap -v -classpath classes org.newsclub.net.unix.ThreadUtil | grep -q 'major version: 52'
+javap -v -classpath classes org.newsclub.net.unix.SelectorProviderShim | grep -F -q openSocketChannel
+javap -v -classpath classes/META-INF/versions/16 org.newsclub.net.unix.SocketAddressUtil | grep -q 'major version: 60'
+javap -v -classpath classes/META-INF/versions/21 org.newsclub.net.unix.ThreadUtil | grep -q 'major version: 65'
 
 cat > manifest.txt << 'END'
 Manifest-Version: 1.0
 Multi-Release: true
 END
 jar cfm junixsocket-common.jar manifest.txt -C classes .
+jar i junixsocket-common.jar
 jar tf junixsocket-common.jar | grep -E '\.(java|jar|so|node|wasm)$' && exit 1 || true
 jar tf junixsocket-common.jar | grep -q 'org/eclipse/jdt/annotation/NonNull.class' && exit 1 || true
 javap -v -classpath junixsocket-common.jar org.newsclub.net.unix.AFUNIXSocketAddress | grep -q 'major version: 52'
@@ -140,7 +156,7 @@ cat > junixsocket-common.pom << 'EOF'
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.kohlschutter.junixsocket</groupId>
   <artifactId>junixsocket-common</artifactId>
-  <version>2.8.3</version>
+  <version>%{version}</version>
   <name>junixsocket-common</name>
   <description>Java API for Unix domain sockets</description>
   <licenses>
